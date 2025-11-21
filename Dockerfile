@@ -1,59 +1,50 @@
-# Multi-stage build for smaller final image
+# ============================
+# 1️⃣ Build Stage
+# ============================
+FROM maven:3.9.9-eclipse-temurin-21 AS builder
 
-# Stage 1: Build the application
-FROM openjdk:21-jdk-slim AS builder
-
+# Set working directory inside the container
 WORKDIR /app
 
-# Install Maven
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    maven \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy Maven files
+# Copy project files
 COPY pom.xml .
-COPY mvnw .
-COPY mvnw.cmd .
-COPY .mvn .mvn
-
-# Copy source code
 COPY src ./src
 
-# Build the application
-RUN chmod +x mvnw && \
-    ./mvnw clean package -DskipTests
+# Build the project (skip tests for faster build)
+RUN mvn clean package -DskipTests
 
-# Stage 2: Runtime image
-FROM openjdk:21-jre-slim
 
+# ============================
+# 2️⃣ Runtime Stage
+# ============================
+FROM eclipse-temurin:21-jre
+
+# Working directory
 WORKDIR /app
 
-# Copy the built JAR from builder stage
-COPY --from=builder /app/target/votenam-0.0.1-SNAPSHOT.jar app.jar
+# Create non-root user
+RUN useradd -ms /bin/bash springuser
 
-# Create uploads directory with proper permissions
-RUN mkdir -p /app/uploads/photos /app/uploads/partylogo && \
-    chmod -R 755 /app/uploads && \
-    chown -R 1000:1000 /app/uploads
+# Copy built JAR file from builder stage
+COPY --from=builder /app/target/*.jar app.jar
 
-# Create a non-root user for security
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+# Create upload directories
+RUN mkdir -p /app/uploads/partylogo /app/uploads/photos
 
-# Switch to non-root user
-USER appuser
+# Assign permissions
+RUN chown -R springuser:springuser /app
+USER springuser
 
-# Expose port 8484
+# Expose the same port as in application.properties
 EXPOSE 8484
 
-# Set environment variables
-ENV JAVA_OPTS="-Xmx512m -Xms256m"
+# Environment variables (can be overridden at runtime)
+ENV SPRING_PROFILES_ACTIVE=prod
+ENV JAVA_OPTS="-Xms256m -Xmx1024m"
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:8484/api/voter || exit 1
+# Volume for file uploads
+VOLUME ["/app/uploads"]
 
-# Run the application
+# Start the Spring Boot application
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 
