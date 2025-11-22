@@ -5,6 +5,7 @@ import com.example.votenam.models.VoteCategory;
 import com.example.votenam.repositories.CandidatesRepository;
 import com.example.votenam.repositories.VoteCategoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,6 +25,24 @@ public class CandidatesService {
     @Autowired
     private FileUploadService fileUploadService;
     
+    @Value("${app.base.url:https://vote.owellgraphics.com}")
+    private String baseUrl;
+    
+    private void transformUrls(Candidates candidate) {
+        if (candidate.getPhotoUrl() != null && candidate.getPhotoUrl().contains("localhost")) {
+            String photoUrl = candidate.getPhotoUrl();
+            // Extract filename from URL
+            String fileName = photoUrl.substring(photoUrl.lastIndexOf("/") + 1);
+            candidate.setPhotoUrl(baseUrl + "/api/photos/view/" + fileName);
+        }
+        if (candidate.getPartyLogoUrl() != null && candidate.getPartyLogoUrl().contains("localhost")) {
+            String logoUrl = candidate.getPartyLogoUrl();
+            // Extract filename from URL
+            String fileName = logoUrl.substring(logoUrl.lastIndexOf("/") + 1);
+            candidate.setPartyLogoUrl(baseUrl + "/api/logos/view/" + fileName);
+        }
+    }
+    
     public Candidates createCandidate(Candidates candidate, MultipartFile photo, MultipartFile partyLogo) throws IOException {
         VoteCategory voteCategory = voteCategoryRepository.findById(candidate.getVoteCategory().getId())
                 .orElseThrow(() -> new RuntimeException("Vote Category not found"));
@@ -40,19 +59,27 @@ public class CandidatesService {
             candidate.setPartyLogoUrl(logoUrl);
         }
         
-        return candidatesRepository.save(candidate);
+        Candidates saved = candidatesRepository.save(candidate);
+        transformUrls(saved);
+        return saved;
     }
     
     public List<Candidates> getAllCandidates() {
-        return candidatesRepository.findAll();
+        List<Candidates> candidates = candidatesRepository.findAll();
+        candidates.forEach(this::transformUrls);
+        return candidates;
     }
     
     public List<Candidates> getCandidatesByVoteCategory(Long voteCategoryId) {
-        return candidatesRepository.findByVoteCategoryId(voteCategoryId);
+        List<Candidates> candidates = candidatesRepository.findByVoteCategoryId(voteCategoryId);
+        candidates.forEach(this::transformUrls);
+        return candidates;
     }
     
     public Optional<Candidates> getCandidateById(Long id) {
-        return candidatesRepository.findById(id);
+        Optional<Candidates> candidate = candidatesRepository.findById(id);
+        candidate.ifPresent(this::transformUrls);
+        return candidate;
     }
     
     public Candidates updateCandidate(Long id, Candidates candidateDetails, MultipartFile photo, MultipartFile partyLogo) throws IOException {
@@ -79,7 +106,9 @@ public class CandidatesService {
             candidate.setPartyLogoUrl(logoUrl);
         }
         
-        return candidatesRepository.save(candidate);
+        Candidates saved = candidatesRepository.save(candidate);
+        transformUrls(saved);
+        return saved;
     }
     
     public void deleteCandidate(Long id) {
