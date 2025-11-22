@@ -1,111 +1,99 @@
-package com.example.votenam.services;
+package com.example.votenam.controllers;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.example.votenam.services.FileUploadService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
-@Service
-public class FileUploadService {
+@RestController
+@CrossOrigin(origins = "*")
+public class FileViewController {
     
-    @Value("${upload.path.images}")
-    private String imagesUploadPath;
+    @Autowired
+    private FileUploadService fileUploadService;
     
-    @Value("${upload.path.documents}")
-    private String documentsUploadPath;
-    
-    @Value("${app.base.url:https://vote.owellgraphics.com}")
-    private String baseUrl;
-    
-    public String uploadPhoto(MultipartFile file) throws IOException {
-        if (!file.getContentType().startsWith("image/")) {
-            throw new IllegalArgumentException("Only image files are allowed");
-        }
-        
-        File uploadDir = new File(imagesUploadPath);
-        if (!uploadDir.exists()) uploadDir.mkdirs();
-        
-        String originalFileName = file.getOriginalFilename();
-        String fileName = originalFileName.substring(0, originalFileName.lastIndexOf('.'))
-                + "_" + System.currentTimeMillis()
-                + originalFileName.substring(originalFileName.lastIndexOf('.'));
-        Path filePath = Paths.get(imagesUploadPath).resolve(fileName);
-        Files.copy(file.getInputStream(), filePath);
-        
-        return baseUrl + "/api/photos/view/" + fileName;
-    }
-    
-    public String uploadLogo(MultipartFile file) throws IOException {
-        if (!file.getContentType().startsWith("image/")) {
-            throw new IllegalArgumentException("Only image files are allowed");
-        }
-        
-        File uploadDir = new File(documentsUploadPath);
-        if (!uploadDir.exists()) uploadDir.mkdirs();
-        
-        String originalFileName = file.getOriginalFilename();
-        String fileName = originalFileName.substring(0, originalFileName.lastIndexOf('.'))
-                + "_" + System.currentTimeMillis()
-                + originalFileName.substring(originalFileName.lastIndexOf('.'));
-        Path filePath = Paths.get(documentsUploadPath).resolve(fileName);
-        Files.copy(file.getInputStream(), filePath);
-        
-        return baseUrl + "/api/logos/view/" + fileName;
-    }
-    
-    public Resource loadFileAsResource(String fileName, String uploadPath) throws MalformedURLException {
+    // View Candidate Photo
+    @GetMapping("/api/photos/view/{fileName:.+}")
+    public ResponseEntity<Resource> viewPhoto(@PathVariable String fileName, HttpServletRequest request) {
         try {
-            Path uploadPathObj = Paths.get(uploadPath).toAbsolutePath().normalize();
-            Path filePath = uploadPathObj.resolve(fileName).normalize();
+            Resource resource = fileUploadService.loadPhotoAsResource(fileName);
             
-            if (!Files.exists(uploadPathObj)) {
-                Files.createDirectories(uploadPathObj);
+            String contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
+            if (contentType == null) {
+                contentType = "application/octet-stream";
             }
             
-            if (!filePath.startsWith(uploadPathObj)) {
-                throw new RuntimeException("Invalid file path - attempted directory traversal");
-            }
-            
-            if (!Files.exists(filePath)) {
-                throw new RuntimeException("File not found: " + fileName);
-            }
-            
-            if (!Files.isReadable(filePath)) {
-                throw new RuntimeException("File is not readable: " + fileName);
-            }
-            
-            Resource resource = new UrlResource(filePath.toUri());
-            return resource;
-            
-        } catch (MalformedURLException e) {
-            throw new RuntimeException("Malformed file URL for: " + fileName + ". Error: " + e.getMessage());
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
+                    .body(resource);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to load file: " + fileName + ". Error: " + e.getMessage());
+            return ResponseEntity.notFound().build();
         }
     }
     
-    public Resource loadPhotoAsResource(String fileName) throws MalformedURLException {
-        // Extract filename from URL if full URL is provided
-        if (fileName.contains("/")) {
-            fileName = fileName.substring(fileName.lastIndexOf("/") + 1);
+    // View Party Logo
+    @GetMapping("/api/logos/view/{fileName:.+}")
+    public ResponseEntity<Resource> viewLogo(@PathVariable String fileName, HttpServletRequest request) {
+        try {
+            Resource resource = fileUploadService.loadLogoAsResource(fileName);
+            
+            String contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
+            if (contentType == null) {
+                contentType = "application/octet-stream";
+            }
+            
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
+                    .body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
         }
-        return loadFileAsResource(fileName, imagesUploadPath);
     }
     
-    public Resource loadLogoAsResource(String fileName) throws MalformedURLException {
-        // Extract filename from URL if full URL is provided
-        if (fileName.contains("/")) {
-            fileName = fileName.substring(fileName.lastIndexOf("/") + 1);
+    // Download Candidate Photo
+    @GetMapping("/api/photos/download/{fileName:.+}")
+    public ResponseEntity<Resource> downloadPhoto(@PathVariable String fileName, HttpServletRequest request) {
+        try {
+            Resource resource = fileUploadService.loadPhotoAsResource(fileName);
+            
+            String contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
+            if (contentType == null) {
+                contentType = "application/octet-stream";
+            }
+            
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + resource.getFilename() + "\"")
+                    .body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
         }
-        return loadFileAsResource(fileName, documentsUploadPath);
+    }
+    
+    // Download Party Logo
+    @GetMapping("/api/logos/download/{fileName:.+}")
+    public ResponseEntity<Resource> downloadLogo(@PathVariable String fileName, HttpServletRequest request) {
+        try {
+            Resource resource = fileUploadService.loadLogoAsResource(fileName);
+            
+            String contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
+            if (contentType == null) {
+                contentType = "application/octet-stream";
+            }
+            
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + resource.getFilename() + "\"")
+                    .body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }
 
