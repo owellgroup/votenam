@@ -22,11 +22,8 @@ public class FileUploadService {
     @Value("${upload.path.documents}")
     private String documentsUploadPath;
     
-    @Value("${server.port:8080}")
-    private String serverPort;
-    
-    @Value("${server.address:localhost}")
-    private String serverAddress;
+    @Value("${app.base.url:https://vote.owellgraphics.com}")
+    private String baseUrl;
     
     public String uploadPhoto(MultipartFile file) throws IOException {
         if (!file.getContentType().startsWith("image/")) {
@@ -43,7 +40,7 @@ public class FileUploadService {
         Path filePath = Paths.get(imagesUploadPath).resolve(fileName);
         Files.copy(file.getInputStream(), filePath);
         
-        return "http://" + serverAddress + ":" + serverPort + "/api/photos/view/" + fileName;
+        return baseUrl + "/api/photos/view/" + fileName;
     }
     
     public String uploadLogo(MultipartFile file) throws IOException {
@@ -61,7 +58,7 @@ public class FileUploadService {
         Path filePath = Paths.get(documentsUploadPath).resolve(fileName);
         Files.copy(file.getInputStream(), filePath);
         
-        return "http://" + serverAddress + ":" + serverPort + "/api/logos/view/" + fileName;
+        return baseUrl + "/api/logos/view/" + fileName;
     }
     
     public Resource loadFileAsResource(String fileName, String uploadPath) throws MalformedURLException {
