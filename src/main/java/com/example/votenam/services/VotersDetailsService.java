@@ -3,6 +3,7 @@ package com.example.votenam.services;
 import com.example.votenam.models.*;
 import com.example.votenam.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -28,6 +29,25 @@ public class VotersDetailsService {
     
     @Autowired
     private EmailService emailService;
+    
+    @Value("${app.base.url:https://vote.owellgraphics.com}")
+    private String baseUrl;
+    
+    private void transformCandidateUrls(VotersDetails vote) {
+        if (vote.getCandidate() != null) {
+            Candidates candidate = vote.getCandidate();
+            if (candidate.getPhotoUrl() != null && candidate.getPhotoUrl().contains("localhost")) {
+                String photoUrl = candidate.getPhotoUrl();
+                String fileName = photoUrl.substring(photoUrl.lastIndexOf("/") + 1);
+                candidate.setPhotoUrl(baseUrl + "/api/photos/view/" + fileName);
+            }
+            if (candidate.getPartyLogoUrl() != null && candidate.getPartyLogoUrl().contains("localhost")) {
+                String logoUrl = candidate.getPartyLogoUrl();
+                String fileName = logoUrl.substring(logoUrl.lastIndexOf("/") + 1);
+                candidate.setPartyLogoUrl(baseUrl + "/api/logos/view/" + fileName);
+            }
+        }
+    }
     
     public VotersDetails submitVote(VotersDetails votersDetails) {
         // Validate Voters ID Number exists in VotersCard FIRST (before other validations)
@@ -72,6 +92,9 @@ public class VotersDetailsService {
         // Save the vote
         VotersDetails savedVote = votersDetailsRepository.save(votersDetails);
         
+        // Transform candidate URLs
+        transformCandidateUrls(savedVote);
+        
         // Send confirmation email
         try {
             emailService.sendVoteConfirmationEmail(
@@ -89,25 +112,33 @@ public class VotersDetailsService {
     }
     
     public List<VotersDetails> getAllVotes() {
-        return votersDetailsRepository.findAll();
+        List<VotersDetails> votes = votersDetailsRepository.findAll();
+        votes.forEach(this::transformCandidateUrls);
+        return votes;
     }
     
     public Optional<VotersDetails> getVoteById(Long id) {
-        return votersDetailsRepository.findById(id);
+        Optional<VotersDetails> vote = votersDetailsRepository.findById(id);
+        vote.ifPresent(this::transformCandidateUrls);
+        return vote;
     }
     
     public List<VotersDetails> getVotesByCandidate(Long candidateId) {
         Candidates candidate = candidatesRepository.findById(candidateId)
                 .orElseThrow(() -> new RuntimeException("Candidate not found"));
-        return votersDetailsRepository.findAll().stream()
+        List<VotersDetails> votes = votersDetailsRepository.findAll().stream()
                 .filter(vote -> vote.getCandidate().getId().equals(candidateId))
                 .toList();
+        votes.forEach(this::transformCandidateUrls);
+        return votes;
     }
     
     public List<VotersDetails> getVotesByVoteCategory(Long voteCategoryId) {
-        return votersDetailsRepository.findAll().stream()
+        List<VotersDetails> votes = votersDetailsRepository.findAll().stream()
                 .filter(vote -> vote.getVoteCategory().getId().equals(voteCategoryId))
                 .toList();
+        votes.forEach(this::transformCandidateUrls);
+        return votes;
     }
 }
 
