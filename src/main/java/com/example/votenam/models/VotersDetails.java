@@ -23,10 +23,10 @@ public class VotersDetails {
     @Column(unique = true, nullable = false)
     private String nationalIdNumber;
     
-    @Column(nullable = false)
+ 
     private LocalDate dateOfBirth;
     
-    @Column(nullable = false)
+  
     private String address;
     
     @ManyToOne
@@ -36,7 +36,7 @@ public class VotersDetails {
     @Column(unique = true, nullable = false)
     private String phoneNumber;
     
-    @Column(unique = true, nullable = false)
+    @Column(unique = true)
     private String email;
     
     @Column(nullable = false)
